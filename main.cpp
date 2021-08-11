@@ -1,5 +1,5 @@
 #include <iostream>
-#include "refl.h"
+#include "refl/refl.h"
 
 using namespace std;
 
@@ -27,7 +27,7 @@ REFL(Obj,
              double di;                                          // 非反射定义，用括号括起来后书写正常语句即可
              void menber_func(int a, int b);// 定义普通的函数
      ))
-)
+);
 
 int main() {
     using namespace refl;

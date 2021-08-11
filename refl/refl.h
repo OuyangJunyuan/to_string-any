@@ -5,8 +5,9 @@
 #ifndef TEST_REFL_H
 #define TEST_REFL_H
 
-#include "preprocess.h"
+#include "pp/preprocess.h"
 #include <utility>
+
 using namespace std;
 namespace refl {
     namespace trait {
@@ -78,6 +79,24 @@ namespace refl {
 
         template<typename T>
         inline constexpr bool is_user_serializable_v{is_user_serializable<T>::type::value};
+
+        template<typename T>
+        struct is_pointer_smart : public false_type {
+        private:
+            template<typename T1, typename = decltype((*declval<T1>(), declval<T1>().operator->(), declval<T1>().get()))>
+            static std::true_type is_pointer_smart_impl(int);
+
+            template<typename>
+            static std::false_type is_pointer_smart_impl(...);
+
+        public:
+            using type = decltype(is_pointer_smart_impl<T>(0));
+        };
+
+        template<typename T>
+        inline constexpr bool is_pointer_smart_v{is_pointer_smart<T>::type::value};
+        template<typename T>
+        inline constexpr bool is_pointer_all_v{is_pointer_smart_v<T> || std::is_pointer_v<T>};
     };
     namespace detail {
         template<typename CharT>
@@ -130,13 +149,13 @@ namespace refl {
             detail::for_each(obj, [&](auto &&metadata, auto &&fieldName, auto &&value, auto &&idx, auto &&cnt) {
                 Cfg new_cfg{cfg.compact, idx, cnt, cfg.depth + 1};
                 if constexpr (trait::is_user_serializable_v<std::decay_t<decltype(metadata)>>) {
-                indent(os, new_cfg);
-                metadata.write(os, value, fieldName, new_cfg);
-                common(os, new_cfg);
-                os << (not new_cfg.compact || new_cfg.depth == 0 ? '\n' : ' ');
-            } else {
-                serialize_impl(os, value, fieldName, new_cfg);
-            }
+                    indent(os, new_cfg);
+                    metadata.write(os, value, fieldName, new_cfg);
+                    common(os, new_cfg);
+                    os << (not new_cfg.compact || new_cfg.depth == 0 ? '\n' : ' ');
+                } else {
+                    serialize_impl(os, value, fieldName, new_cfg);
+                }
             });
             indent(os, cfg);
             os << "}";
@@ -171,8 +190,16 @@ namespace refl {
         void serialize_impl(std::basic_ostream<CharT> &os, _T &&obj, const char *fieldName, const Cfg &cfg) {
 
             using T = std::decay_t<_T>;
-
-            if constexpr (std::is_class_v<T> and trait::is_reflectable_v<T>) {
+            using no_pointer_t = std::remove_pointer_t<T>;
+            if constexpr (trait::is_pointer_all_v<T> && !std::is_void_v<no_pointer_t>) {
+                if (obj == nullptr) {
+                    indent(os, cfg);
+                    os << fieldName << ": nullptr";
+                } else {
+                    serialize_impl(os, *obj, ("&"+string(fieldName)).c_str(), cfg);
+                    return;
+                }
+            } else if constexpr (std::is_class_v<T> and trait::is_reflectable_v<T>) {
                 serialize_reflectable(os, obj, fieldName, cfg);
             } else if constexpr (trait::is_container_v<T>) {
                 serialize_container(os, obj, fieldName, cfg);
