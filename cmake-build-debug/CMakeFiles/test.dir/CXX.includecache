@@ -1,0 +1,28 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/ou/Desktop/class2string/main.cpp
+iostream
+-
+map
+-
+refl/refl.h
+/home/ou/Desktop/class2string/refl/refl.h
+
+/home/ou/Desktop/class2string/refl/pp/preprocess.h
+preprocess_repeat.h
+/home/ou/Desktop/class2string/refl/pp/preprocess_repeat.h
+
+/home/ou/Desktop/class2string/refl/pp/preprocess_repeat.h
+
+/home/ou/Desktop/class2string/refl/refl.h
+pp/preprocess.h
+/home/ou/Desktop/class2string/refl/pp/preprocess.h
+utility
+-
+
