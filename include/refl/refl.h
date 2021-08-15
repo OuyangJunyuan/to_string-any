@@ -172,9 +172,15 @@ namespace reflect {
         static_assert(trait::is_valid_v<T>, "Type is not support to serialize !");
         detail::serialize_impl(os, obj, title, {compact, 0, 1, 0});
     }
+    template<typename U>
+    inline auto to_string(const U &obj) {
+        std::stringstream ss;
+        serialize(ss,obj);
+        return ss.str();
+    }
 }
 
-#define REFL(NAME, ...) struct NAME {                                                                                 \
+#define REFL(NAME, ...) struct NAME {                                                                                   \
     template <typename, size_t>                                                                                         \
     struct member;                                                                                                      \
     static constexpr size_t member_index_offset = __COUNTER__ + 1;                                                      \

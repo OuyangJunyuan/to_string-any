@@ -3,6 +3,7 @@
 #include <list>
 #include <map>
 #include <iostream>
+#include "test.h" // include other files before refl
 #include "refl/refl.h"
 
 using namespace std;
@@ -24,7 +25,8 @@ REFL(Config,                                                    // 顶层结构�
         L(size_t, num_lidar, 3),
         L(float, voxel_size, 0.1f),
         L(double, roi_range_max, 300.0f),
-        L(const char*, title, "lidar_perception_sys")),
+        L(const char*, title, "lidar_perception_sys"),
+             L(NotPrintable, not_p)),
 
      __(void func1() { std::cout << "reserve format"; }),      // __(...)用于正常的声明
      __(void func2(int) {})
@@ -33,6 +35,6 @@ REFL(Config,                                                    // 顶层结构�
 int main() {
     auto cfg = Config();
     reflect::serialize(cout, cfg, "config");
-    cfg.func1();
+//    cout << reflect::to_string(cfg) << endl;
     return 0;
 }
