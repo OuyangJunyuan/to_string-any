@@ -1,45 +1,38 @@
-#include <iostream>
+#include <vector>
+#include <array>
+#include <list>
 #include <map>
+#include <iostream>
 #include "refl/refl.h"
 
 using namespace std;
 
-template<typename T>
-void serialize(ostream &os, const T &obj, const char *fieldName, const refl::detail::Cfg &cfg) {
-    refl::utils::decorate(os, obj, fieldName, cfg, [&]() {
-        std::cout << "user-serialize-T";
-    });
-}
 
-void serialize_int(ostream &os, const int &obj, const char *fieldName, const refl::detail::Cfg &cfg) {
-    refl::utils::decorate(os, obj, fieldName, cfg, [&]() {
-        std::cout << "user-serialize-int";
-    });
-}
-template<typename T>
-void print_map(ostream &os, const std::map<int, int> &obj, const char *fieldName, const refl::detail::Cfg &cfg);
+REFL(Config,                                                    // 顶层结构体声明
+     L_(Con, container_example,                                 // 嵌套结构体声明：结构体名：Con，变量名：container_example
+        L(vector<float>, voxel_size, (0.1f, 0.1f, 0.1f)),       // 字段声明：L(字段类型, 字段名, 初始化值)
+        L(list<int>, id, (1, 2, 3)),
+        L((array<string, 3>), lidar_name, ("RS80_1", "RS80_2", "VLP32_1")),
+        L((map<string, vector<double>>), roi_size,              // 多参数模板类字段类型  需要额外加()
+          ({ "RS80_1", vector<double>{1.0, 2.0, 3.0}},          // 默认参数多个值时      需要额外加()
+          {"RS80_2", vector<double>{1.0, 2.0, 3.0}},
+          {"VLP32_1", vector<double>{1.0, 2.0, 3.0}}))),
 
-template<typename, typename>
-struct UserCls {
-};
+     L_(Arg, arg,
+        L(string, odom_topics, "/excavator_odom"),
+        L(int, max_num, 1000),
+        L(size_t, num_lidar, 3),
+        L(float, voxel_size, 0.1f),
+        L(double, roi_range_max, 300.0f),
+        L(const char*, title, "lidar_perception_sys")),
 
-
-REFL(Obj,,
-     (int, u, (serialize, T)),                             // 反射定义 int u,  使用自定义序列化 模板 函数
-     (int, v, (serialize, T)),                             // 反射定义 int v,   使用自定义序列化 模板 函数
-     (int, w, (serialize_int)),                         // 反射定义 int w,  使用自定义序列化          函数
-     (int, (x, 1)),                                                 // 反射定义 int x,   使用默认序列化函数
-     ((
-             UserCls<int, int> bar;                    // 非反射定义，由于类型有逗号，使用双括号再书写语句
-             double di;                                          // 非反射定义，用括号括起来后书写正常语句即可
-             void menber_func(int a, int b);// 定义普通的函数
-     ))
+     __(void func1() { std::cout << "reserve format"; }),      // __(...)用于正常的声明
+     __(void func2(int) {})
 );
 
-
 int main() {
-    using namespace refl;
-    Obj obj;
-    utils::serialize(cout, obj, "obj", false);
+    auto cfg = Config();
+    reflect::serialize(cout, cfg, "config");
+    cfg.func1();
     return 0;
 }

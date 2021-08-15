@@ -21,6 +21,7 @@
  *
  */
 #define PP_CONCAT(A, B)                         PP_CONCAT_IMPL(A, B)
+#define PP_CAT(A, B)                            PP_CONCAT_IMPL(A, B)
 #define PP_CONCAT_IMPL(A, B)                    A##B
 
 /***
@@ -107,8 +108,9 @@
 /***
 * @brief: 获取可变参数个数
 */
-#define PP_GET_ARG_COUNT_IMPL(_1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, _20, _21, _22, _23, _24, _25, _26, _27, _28, _29, _30, _31, _32, n, ...) n
-#define PP_GET_ARG_COUNT(...)                   PP_GET_ARG_COUNT_IMPL(__VA_ARGS__,32, 31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9,  8,  7,  6,  5,  4,  3,  2,  1)
+#define PP_GET_ARG_COUNT(...)                   PP_GET_N(32, __VA_ARGS__ PP_VA_OPT_COMMA(__VA_ARGS__) 32, 31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0)
+//#define PP_GET_ARG_COUNT_IMPL(_1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, _20, _21, _22, _23, _24, _25, _26, _27, _28, _29, _30, _31, _32, n, ...) n
+//#define PP_GET_ARG_COUNT(...)                   PP_GET_ARG_COUNT_IMPL(__VA_ARGS__,32, 31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9,  8,  7,  6,  5,  4,  3,  2,  1)
 #define PP_GET_TUPLE_COUNT(T)                   PP_GET_ARG_COUNT(PP_TRY_REMOVE_PARENS(T))
 
 /***
@@ -172,5 +174,40 @@
 #define PP_DIV_BASE_P(V)                        PP_NOT(PP_LESS(PP_GET_TUPLE(1, V), PP_GET_TUPLE(2, V)))  // X >= Y
 #define PP_DIV_BASE_O(V)                        (PP_INC(PP_GET_TUPLE(0, V)), PP_SUB(PP_GET_TUPLE(1, V), PP_GET_TUPLE(2, V)), PP_GET_TUPLE(2, V))
 
+/***
+ * some utils applications
+ */
+#ifdef _GLIBCXX_TYPE_TRAITS
+#define PP_DECLVAL(...)                         std::declval<__VA_ARGS__>()
+#else
+#define PP_DECLVAL(...)                         (*(__VA_ARGS__*)0)
+#endif
 
+#define PP_GET_LAST_ARGS(...)                   PP_GET_N( PP_DEC(PP_GET_ARG_COUNT(__VA_ARGS__)),__VA_ARGS__)
+#define PP_MAKE_TRAITS_HAS_XXX(NAME, ...)       template<typename T> struct NAME {                                                          \
+                                                private:                                                                                    \
+                                                    template<class U> static auto check(int) -> decltype(__VA_ARGS__, std::true_type());    \
+                                                    template<class U> static std::false_type check(...);                                    \
+                                                public:static constexpr bool value{decltype(check<T>(0))::value};                           \
+                                                };template<class T> inline constexpr bool NAME##_v{NAME<T>::value};
+
+/**
+ * 缺陷：函数N的定义必须在这个宏调用前才能正确使用
+ * 否则会因为没有函数定义而失败。
+ */
+#define PP_MAKE_TRAITS_CALLABLE_XXX(N)          template<class ...Args>                                                                     \
+                                                struct is_##N##_callable {                                                                  \
+                                                    template<class ...args> static auto check(int)                                          \
+                                                    -> decltype((std::void_t<decltype(N(PP_DECLVAL(args)...))> *) 0, std::true_type()) {};  \
+                                                    template<class ...args> static std::false_type check(...) {};                           \
+                                                    static constexpr bool value{decltype(check<Args...>(0))::value};                        \
+                                                }; template<class ...Args> inline constexpr bool is_##N##_callable_v                        \
+                                                {is_##N##_callable<Args...>::value};
+
+
+template<class T>
+T ____________________________________________________________________________1();
+
+#define PP_TEST_TEMPLATE(...)                   ____________________________________________________________________________1<decltype(__VA_ARGS__)>()
+#define PP_TEST_TEMPLATE_TYPE(...)              ____________________________________________________________________________1<__VA_ARGS__>()
 #endif //TEST_PREPROCESS_H

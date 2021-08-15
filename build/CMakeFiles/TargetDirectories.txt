@@ -1,3 +1,0 @@
-/home/ou/Desktop/class2string/build/CMakeFiles/rebuild_cache.dir
-/home/ou/Desktop/class2string/build/CMakeFiles/test.dir
-/home/ou/Desktop/class2string/build/CMakeFiles/edit_cache.dir
