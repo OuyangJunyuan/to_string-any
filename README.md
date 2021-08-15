@@ -3,7 +3,7 @@
 实现变量的序列化，像to_string(int(1))一样，能够自动完成结构体成员的序列化。
 
 # 例子
-
+本例子已经被弃用，实际使用请参考main.cpp及其注释
 ```c++
 #include <iostream>
 #include "refl.h"
