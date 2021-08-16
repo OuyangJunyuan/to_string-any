@@ -7,8 +7,6 @@
 
 #include "pp/preprocess.h"
 #include <utility>
-#include <string>
-#include <ostream>
 #include <sstream>
 
 namespace reflect::trait {
@@ -22,7 +20,7 @@ namespace reflect::trait {
 
     PP_MAKE_TRAITS_HAS_XXX(is_map, PP_DECLVAL(U).key_comp())
 
-    PP_MAKE_TRAITS_CALLABLE_XXX(debug)
+    PP_MAKE_TRAITS_CALLABLE_XXX(serialize)
 
     template<bool>
     struct is_valid : std::false_type {
@@ -46,11 +44,9 @@ namespace reflect {
     namespace detail {
         template<typename CHAR_T>
         using OS = std::basic_ostream<CHAR_T>;
-        struct Cfg {
-            bool compact = false;
-            size_t idx = 0, cnt = 1, depth = 0;
-        };
-        inline constexpr Cfg none_indent_line{true, 0, 1, 1};
+
+        template<typename CHAR_T, typename U>
+        void serialize_impl(OS<CHAR_T> &, const U &, const char *,bool, size_t, size_t, size_t);
 
         template<typename _T, typename F, size_t... Is>
         inline constexpr void for_each(_T &&obj, F &&f, std::index_sequence<Is...>) {
@@ -70,98 +66,104 @@ namespace reflect {
         }
 
         template<typename CHAR_T>
-        inline void indent(OS<CHAR_T> &os, const Cfg &cfg) {
-            if (not cfg.compact) for (int i = 0; i < cfg.depth; i++) os << "    ";
+        inline void indent(OS<CHAR_T> &os, bool compact = false, size_t idx = 0, size_t cnt = 1, size_t depth = 0) {
+            if (not compact) for (int i = 0; i < depth; i++) os << "    ";
         }
 
         template<typename CHAR_T>
-        inline void common(OS<CHAR_T> &os, const Cfg &cfg) { os << (cfg.idx + 1 == cfg.cnt ? "" : ","); }
+        inline void common(OS<CHAR_T> &os, bool compact = false, size_t idx = 0, size_t cnt = 1, size_t depth = 0) {
+            os << (idx + 1 == cnt ? "" : ",");
+        }
 
         template<typename CHAR_T, typename T>
-        void serialize_reflectable(OS<CHAR_T> &os, const T &obj, const char *fieldName, const Cfg &cfg) {
+        void serialize_reflectable(OS<CHAR_T> &os, const T &obj, const char *name,
+                                   bool compact = false, size_t idx = 0, size_t cnt = 1, size_t depth = 0) {
             using namespace reflect;
-            indent(os, cfg);
-            os << fieldName << ": {" << (cfg.compact ? ' ' : '\n');
-            detail::for_each(obj, [&](auto &&metadata, auto &&fieldName, auto &&value, auto &&idx, auto &&cnt) {
-                Cfg new_cfg{cfg.compact, idx, cnt, cfg.depth + 1};
-                if constexpr (trait::is_debug_callable_v<std::decay_t<decltype(metadata)>>) {
-                    debug(value);
+            indent(os, compact, idx, cnt, depth);
+            os << name << ": {" << (compact ? ' ' : '\n');
+            detail::for_each(obj, [&](auto &&metadata, auto &&name, auto &&value, auto &&idx, auto &&cnt) {
+                if constexpr (trait::is_serialize_callable_v<decltype(os) &, decltype(value), const char *, bool, size_t, size_t, size_t>) {
+                    serialize(os, value, name, compact, idx, cnt, depth + 1);
                 } else {
-                    serialize_impl(os, value, fieldName, new_cfg);
+                    serialize_impl(os, value, name, compact, idx, cnt, depth + 1);
                 }
             });
-            indent(os, cfg);
+            indent(os, compact, idx, cnt, depth);
             os << "}";
-            common(os, cfg);
-            os << (not cfg.compact || cfg.depth == 0 ? '\n' : ' ');
+            common(os, compact, idx, cnt, depth);
+            os << (not compact || depth == 0 ? '\n' : ' ');
         }
 
         template<typename CHAR_T, typename T, typename F=nullptr_t>
-        void serialize_container(OS<CHAR_T> &os, T &&obj, const char *fieldName, const Cfg &cfg, F &&f = nullptr) {
-            indent(os, cfg);
-            os << fieldName << ": {" << (cfg.compact ? ' ' : '\n');
+        void serialize_container(OS<CHAR_T> &os, T &&obj, const char *name,
+                                 bool compact = false, size_t idx = 0, size_t cnt = 1, size_t depth = 0,
+                                 F &&f = nullptr) {
+            indent(os, compact, idx, cnt, depth);
+            os << name << ": {" << (compact ? ' ' : '\n');
             size_t i = 0;
             for (auto &&it:obj) {
-                Cfg new_depth{cfg.compact, i, std::size(obj), cfg.depth + 1};
                 if constexpr (not std::is_null_pointer_v<F>) {
-                    f(os, it, std::to_string(i).c_str(), new_depth);
+                    f(os, it, std::to_string(i).c_str(), compact, i, cnt, depth + 1);
                 } else {
                     std::stringstream ss;
                     if constexpr (trait::is_map_v<T>) {
                         ss << "[";
                         trait::is_printable_v<decltype(it.first)> ? ss << it.first << "]" : ss << i << "]";
-                        serialize_impl(os, it.second, ss.str().c_str(), new_depth);
+                        serialize_impl(os, it.second, ss.str().c_str(), compact, i, cnt, depth + 1);
                     } else {
                         ss << "[" << i << "]";
-                        serialize_impl(os, it, ss.str().c_str(), new_depth);
+                        serialize_impl(os, it, ss.str().c_str(), compact, i, cnt, depth + 1);
                     }
                 }
                 ++i;
             }
-            indent(os, cfg);
+            indent(os, compact, idx, cnt, depth);
             os << "}";
-            common(os, cfg);
-            os << (not cfg.compact || cfg.depth == 0 ? '\n' : ' ');
+            common(os, compact, idx, cnt, depth);
+            os << (not compact || depth == 0 ? '\n' : ' ');
         }
 
         template<typename CHAR_T, typename T>
-        void serialize_os_print(OS<CHAR_T> &os, T &&obj, const char *fieldName, const Cfg &cfg) {
-            indent(os, cfg);
-            os << fieldName << ": " << obj;
-            common(os, cfg);
-            os << (not cfg.compact || cfg.depth == 0 ? '\n' : ' ');
+        void serialize_os_print(OS<CHAR_T> &os, T &&obj, const char *name,
+                                bool compact = false, size_t idx = 0, size_t cnt = 1, size_t depth = 0) {
+            indent(os, compact, idx, cnt, depth);
+            os << name << ": " << obj;
+            common(os, compact, idx, cnt, depth);
+            os << (not compact || depth == 0 ? '\n' : ' ');
         }
 
         template<typename CHAR_T, typename T>
-        void serialize_not_printable(OS<CHAR_T> &os, T &&obj, const char *fieldName, const Cfg &cfg) {
-            indent(os, cfg);
-            os << fieldName << ": " << "not printable";
-            common(os, cfg);
-            os << (not cfg.compact || cfg.depth == 0 ? '\n' : ' ');
+        void serialize_not_printable(OS<CHAR_T> &os, T &&obj, const char *name,
+                                     bool compact = false, size_t idx = 0, size_t cnt = 1, size_t depth = 0) {
+            indent(os, compact, idx, cnt, depth);
+            os << name << ": " << "not printable";
+            common(os, compact, idx, cnt, depth);
+            os << (not compact || depth == 0 ? '\n' : ' ');
         }
 
         template<typename CHAR_T, typename U>
-        void serialize_impl(std::basic_ostream<CHAR_T> &os, const U &obj, const char *fieldName, const Cfg &cfg) {
+        void serialize_impl(OS<CHAR_T> &os, const U &obj, const char *name,
+                            bool compact, size_t idx, size_t cnt, size_t depth) {
             using rawtype_t = std::decay_t<U>;
             using no_pointer_t = std::remove_pointer_t<U>;
 
             if constexpr (trait::is_general_pointer_v<rawtype_t> and not std::is_void_v<no_pointer_t>) {
                 if (obj == nullptr) {
-                    indent(os, cfg);//serialize_impl(os,"nullptr",fieldName,cfg)
-                    os << fieldName << ": nullptr";
+                    indent(os, compact, idx, cnt, depth);//serialize_impl(os,"nullptr",name,cfg)
+                    os << name << ": nullptr";
                 } else {
-                    serialize_impl(os, *obj, (std::to_string('*') + fieldName), cfg);
+                    serialize_impl(os, *obj, (std::to_string('*') + name), compact, idx, cnt, depth);
                 }
-            } else if constexpr (trait::is_debug_callable_v<U>) {
-                debug(obj);
+            } else if constexpr (trait::is_serialize_callable_v<decltype(os), U, const char *, bool, size_t, size_t, size_t>) {
+                serialize(os, obj, name, compact, idx, cnt, depth);
             } else if constexpr (std::is_class_v<U> and trait::is_reflect_v<U>) {
-                serialize_reflectable(os, obj, fieldName, cfg);
+                serialize_reflectable(os, obj, name, compact, idx, cnt, depth);
             } else if constexpr (trait::is_container_v<U> && not trait::is_string_v<U>) {
-                serialize_container(os, obj, fieldName, cfg);
+                serialize_container(os, obj, name, compact, idx, cnt, depth);
             } else if constexpr (trait::is_printable_v<U>) {
-                serialize_os_print(os, obj, fieldName, cfg);
+                serialize_os_print(os, obj, name, compact, idx, cnt, depth);
             } else {
-                serialize_not_printable(os, obj, fieldName, cfg);
+                serialize_not_printable(os, obj, name, compact, idx, cnt, depth);
             }
         }
     }
@@ -170,12 +172,13 @@ namespace reflect {
     inline void serialize(std::basic_ostream<CHAR_T> &os, const U &obj, const char *title = "", bool compact = false) {
         using T = std::decay_t<U>;
         static_assert(trait::is_valid_v<T>, "Type is not support to serialize !");
-        detail::serialize_impl(os, obj, title, {compact, 0, 1, 0});
+        detail::serialize_impl(os, obj, title, compact, 0, 1, 0);
     }
+
     template<typename U>
     inline auto to_string(const U &obj) {
         std::stringstream ss;
-        serialize(ss,obj);
+        serialize(ss, obj);
         return ss.str();
     }
 }

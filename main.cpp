@@ -1,10 +1,10 @@
+#include "test.h" // include other files before refl
+#include "refl/refl.h"
 #include <vector>
 #include <array>
 #include <list>
 #include <map>
 #include <iostream>
-#include "test.h" // include other files before refl
-#include "refl/refl.h"
 
 using namespace std;
 
@@ -32,9 +32,17 @@ REFL(Config,                                                    // 顶层结构�
      __(void func2(int) {})
 );
 
+
 int main() {
     auto cfg = Config();
     reflect::serialize(cout, cfg, "config");
-//    cout << reflect::to_string(cfg) << endl;
+    cout << reflect::to_string(cfg) << endl;
     return 0;
+}
+
+namespace reflect {
+    void serialize(std::basic_ostream<char> &os, const NotPrintable &x, const char *name,
+                   bool compact, size_t idx, size_t cnt, size_t depth) {
+        os << "error" << endl;
+    }
 }
