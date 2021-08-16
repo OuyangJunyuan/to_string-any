@@ -34,10 +34,10 @@ namespace reflect::trait {
     bool is_string_v{std::disjunction<std::is_same<T, std::string>, std::is_same<T, const char *>>::value};
 
     template<class T>
-    inline constexpr bool is_general_pointer_v{std::is_pointer_v<T> && is_smart_pointer_v<T>};
+    inline constexpr bool is_general_pointer_v{std::is_pointer_v<T> or is_smart_pointer_v<T>};
 
     template<class T>
-    inline constexpr bool is_valid_v = is_valid<is_reflect_v<T> || is_printable_v<T> || is_container_v<T>>::value;
+    inline constexpr bool is_valid_v = is_valid<is_reflect_v<T> or is_printable_v<T> or is_container_v<T>>::value;
 }
 
 namespace reflect {
@@ -46,7 +46,7 @@ namespace reflect {
         using OS = std::basic_ostream<CHAR_T>;
 
         template<typename CHAR_T, typename U>
-        void serialize_impl(OS<CHAR_T> &, const U &, const char *,bool, size_t, size_t, size_t);
+        void serialize_impl(OS<CHAR_T> &, const U &, const char *, bool, size_t, size_t, size_t);
 
         template<typename _T, typename F, size_t... Is>
         inline constexpr void for_each(_T &&obj, F &&f, std::index_sequence<Is...>) {
@@ -91,7 +91,7 @@ namespace reflect {
             indent(os, compact, idx, cnt, depth);
             os << "}";
             common(os, compact, idx, cnt, depth);
-            os << (not compact || depth == 0 ? '\n' : ' ');
+            os << (not compact or depth == 0 ? '\n' : ' ');
         }
 
         template<typename CHAR_T, typename T, typename F=nullptr_t>
@@ -100,19 +100,19 @@ namespace reflect {
                                  F &&f = nullptr) {
             indent(os, compact, idx, cnt, depth);
             os << name << ": {" << (compact ? ' ' : '\n');
-            size_t i = 0;
+            size_t i = 0, size = obj.size();
             for (auto &&it:obj) {
                 if constexpr (not std::is_null_pointer_v<F>) {
-                    f(os, it, std::to_string(i).c_str(), compact, i, cnt, depth + 1);
+                    f(os, it, std::to_string(i).c_str(), compact, i, size, depth + 1);
                 } else {
                     std::stringstream ss;
                     if constexpr (trait::is_map_v<T>) {
                         ss << "[";
                         trait::is_printable_v<decltype(it.first)> ? ss << it.first << "]" : ss << i << "]";
-                        serialize_impl(os, it.second, ss.str().c_str(), compact, i, cnt, depth + 1);
+                        serialize_impl(os, it.second, ss.str().c_str(), compact, i, size, depth + 1);
                     } else {
                         ss << "[" << i << "]";
-                        serialize_impl(os, it, ss.str().c_str(), compact, i, cnt, depth + 1);
+                        serialize_impl(os, it, ss.str().c_str(), compact, i, size, depth + 1);
                     }
                 }
                 ++i;
@@ -120,7 +120,7 @@ namespace reflect {
             indent(os, compact, idx, cnt, depth);
             os << "}";
             common(os, compact, idx, cnt, depth);
-            os << (not compact || depth == 0 ? '\n' : ' ');
+            os << (not compact or depth == 0 ? '\n' : ' ');
         }
 
         template<typename CHAR_T, typename T>
@@ -129,16 +129,16 @@ namespace reflect {
             indent(os, compact, idx, cnt, depth);
             os << name << ": " << obj;
             common(os, compact, idx, cnt, depth);
-            os << (not compact || depth == 0 ? '\n' : ' ');
+            os << (not compact or depth == 0 ? '\n' : ' ');
         }
 
         template<typename CHAR_T, typename T>
         void serialize_not_printable(OS<CHAR_T> &os, T &&obj, const char *name,
                                      bool compact = false, size_t idx = 0, size_t cnt = 1, size_t depth = 0) {
             indent(os, compact, idx, cnt, depth);
-            os << name << ": " << "not printable";
+            os << name << ": " << "no printable";
             common(os, compact, idx, cnt, depth);
-            os << (not compact || depth == 0 ? '\n' : ' ');
+            os << (not compact or depth == 0 ? '\n' : ' ');
         }
 
         template<typename CHAR_T, typename U>
@@ -149,14 +149,15 @@ namespace reflect {
 
             if constexpr (trait::is_general_pointer_v<rawtype_t> and not std::is_void_v<no_pointer_t>) {
                 if (obj == nullptr) {
-                    indent(os, compact, idx, cnt, depth);//serialize_impl(os,"nullptr",name,cfg)
-                    os << name << ": nullptr";
+                    serialize_impl(os, std::string("nullptr"), name, compact, idx, cnt, depth);
                 } else {
-                    serialize_impl(os, *obj, (std::to_string('*') + name), compact, idx, cnt, depth);
+                    serialize_impl(os, *obj, (std::string("*") + name).c_str(), compact, idx, cnt, depth);
                 }
-            } else if constexpr (trait::is_serialize_callable_v<decltype(os), U, const char *, bool, size_t, size_t, size_t>) {
+            } else if constexpr (trait::is_serialize_callable_v<decltype(os) &, U, const char *, bool, size_t, size_t, size_t>) {
                 serialize(os, obj, name, compact, idx, cnt, depth);
-            } else if constexpr (std::is_class_v<U> and trait::is_reflect_v<U>) {
+            } else if constexpr (std::is_same_v<U, bool>) {
+                serialize_impl(os,std::string(obj ? "true" : "false"), name, compact, idx, cnt, depth);
+            } else if constexpr (trait::is_reflect_v<U>) {
                 serialize_reflectable(os, obj, name, compact, idx, cnt, depth);
             } else if constexpr (trait::is_container_v<U> && not trait::is_string_v<U>) {
                 serialize_container(os, obj, name, compact, idx, cnt, depth);
@@ -168,17 +169,24 @@ namespace reflect {
         }
     }
 
+    inline auto decorate = [](auto &&os, bool &compact, size_t &idx, size_t &cnt, size_t &depth, auto &&f) {
+        detail::indent(os, compact, idx, cnt, depth);
+        f();
+        detail::common(os, compact, idx, cnt, depth);
+        os << (not compact or depth == 0 ? '\n' : ' ');
+    };
+
     template<typename CHAR_T=char, typename U>
-    inline void serialize(std::basic_ostream<CHAR_T> &os, const U &obj, const char *title = "", bool compact = false) {
-        using T = std::decay_t<U>;
-        static_assert(trait::is_valid_v<T>, "Type is not support to serialize !");
+    inline void
+    serialize(std::basic_ostream<CHAR_T> &os, const U &obj, const char *title = "uname", bool compact = false) {
+        static_assert(trait::is_valid_v<std::decay_t<U>>, "Type is not support to serialize !");
         detail::serialize_impl(os, obj, title, compact, 0, 1, 0);
     }
 
     template<typename U>
-    inline auto to_string(const U &obj) {
+    inline auto to_string(const U &obj, const char *name = "uname", bool compact = false) {
         std::stringstream ss;
-        serialize(ss, obj);
+        serialize(ss, obj, name, compact);
         return ss.str();
     }
 }
@@ -196,7 +204,7 @@ namespace reflect {
 #define REFL_DECODE_FILED_DEFAULT_1(T, ...)     {PP_TRY_REMOVE_PARENS(T)}
 #define REFL_DECODE_FILED_DEFAULT_2(T, _, ...)  {PP_TRY_REMOVE_PARENS(T)}
 #define REFL_DECODE_FIELD_DEFAULT(...)          PP_CAT(REFL_DECODE_FILED_DEFAULT_,PP_GET_ARG_COUNT(__VA_ARGS__))(__VA_ARGS__)
-#define REFL_DECODE___(...)                   __VA_ARGS__
+#define REFL_DECODE___(...)                     __VA_ARGS__
 #define REFL_DECODE_L(T, N, ...)                PP_TRY_REMOVE_PARENS(T) N REFL_DECODE_FIELD_DEFAULT(__VA_ARGS__);       \
                                                 template <typename U>                                                   \
                                                 struct member<U, __COUNTER__ - member_index_offset > {                  \
@@ -207,9 +215,14 @@ namespace reflect {
                                                     static constexpr auto name() { return PP_STR(N);}                   \
                                                 };
 
-/*
+/***
  * 嵌套结构体声明
  */
 #define L_(T, N, ...)                           L((REFL(T,__VA_ARGS__)), N)
+/***
+ * 自定义序列化函数
+ */
+#define REFL_DEFINE_SERIALIZE(_1, _2, _3, _4, _5, _6, _7, ...)         \
+void serialize(std::basic_ostream<char> & _1, const __VA_ARGS__ & _2,const char * _3, bool _4, size_t _5, size_t _6, size_t _7)
 
 #endif //TEST_REFL_H

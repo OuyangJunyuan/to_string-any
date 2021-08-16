@@ -25,24 +25,31 @@ REFL(Config,                                                    // 顶层结构�
         L(size_t, num_lidar, 3),
         L(float, voxel_size, 0.1f),
         L(double, roi_range_max, 300.0f),
-        L(const char*, title, "lidar_perception_sys"),
-             L(NotPrintable, not_p)),
+        L(bool, is_ok, false),
+        L(int * , int_p, nullptr),
+        L(NotPrintable, not_p, (1, 2, 3))),
 
-     __(void func1() { std::cout << "reserve format"; }),      // __(...)用于正常的声明
-     __(void func2(int) {})
+     __(
+             int int_unreflectable;                             // __(...)语句 用于正常结构体内容声明
+             void func() { std::cout << "hello world!" << std::endl; }
+     )
 );
 
 
 int main() {
     auto cfg = Config();
-    reflect::serialize(cout, cfg, "config");
-    cout << reflect::to_string(cfg) << endl;
+    reflect::serialize(cout, cfg);
+
     return 0;
 }
 
 namespace reflect {
-    void serialize(std::basic_ostream<char> &os, const NotPrintable &x, const char *name,
-                   bool compact, size_t idx, size_t cnt, size_t depth) {
-        os << "error" << endl;
+    REFL_DEFINE_SERIALIZE(os, obj, name, compact, idx, cnt, depth, NotPrintable) {
+        decorate(os, compact, idx, cnt, depth, [&] {
+            os << name << ": {";
+            os << "x: " << obj.x << ", ";
+            os << "y: " << obj.y << ", ";
+            os << "z: " << obj.z << " }";
+        });
     }
 }
